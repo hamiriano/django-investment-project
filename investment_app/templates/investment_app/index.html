@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Investment App Index</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            width: 80%;
+            margin: auto;
+            overflow: hidden;
+        }
+        header {
+            background: #333;
+            color: #fff;
+            padding-top: 30px;
+            min-height: 70px;
+            border-bottom: #77aaff 3px solid;
+        }
+        header a {
+            color: #fff;
+            text-decoration: none;
+            text-transform: uppercase;
+            font-size: 16px;
+        }
+        ul {
+            padding: 0;
+            list-style: none;
+        }
+        ul li {
+            display: inline;
+            margin-right: 10px;
+        }
+        form {
+            margin-top: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+        }
+        input, button {
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1>Investment App Index</h1>
+        </div>
+    </header>
+    <div class="container">
+        <ul>
+            <li><a href="{% url 'weight-list' %}">Weight List</a></li>
+            <li><a href="{% url 'price-list' %}">Price List</a></li>
+        </ul>
+        <form action="{% url 'portfolio-weights' 1 %}" method="get">
+            <label for="portafolio_id">Portfolio Weights (Enter Portfolio ID):</label>
+            <input type="number" id="portafolio_id" name="portafolio_id" required>
+            <button type="submit">Go</button>
+        </form>
+        <form action="{% url 'portfolio-values' 1 %}" method="get">
+            <label for="fecha_inicio">Portfolio Values (Enter Portfolio ID, Start Date, End Date):</label>
+            <input type="number" id="portafolio_id" name="portafolio_id" required>
+            <input type="date" id="fecha_inicio" name="fecha_inicio" required>
+            <input type="date" id="fecha_fin" name="fecha_fin" required>
+            <button type="submit">Go</button>
+        </form>
+        <ul>
+            <li><a href="{% url 'cargar-datos' %}">Cargar Datos</a></li>
+        </ul>
+    </div>
+</body>
+</html>

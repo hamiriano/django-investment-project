@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Portfolio Weights</title>
+</head>
+<body>
+    <h1>Portfolio Weights</h1>
+    <table>
+        <thead>
+            <tr>
+                <th>Activo</th>
+                <th>Peso</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for weight in weights %}
+            <tr>
+                <td>{{ weight.activo.nombre }}</td>
+                <td>{{ weight.peso }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</body>
+</html>
