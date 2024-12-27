@@ -15,38 +15,51 @@ from django.core.files.base import ContentFile
 from rest_framework.parsers import MultiPartParser
 import logging
 
+def index(request):
+    return render(request, 'investment_app/index.html')
+# ViewSet para el modelo Activo
 class ActivoViewSet(viewsets.ModelViewSet):
     queryset = Activo.objects.all()
     serializer_class = ActivoSerializer
 
+# ViewSet para el modelo Portafolio
 class PortafolioViewSet(viewsets.ModelViewSet):
     queryset = Portafolio.objects.all()
     serializer_class = PortafolioSerializer
 
+# ViewSet para el modelo Precio
 class PrecioViewSet(viewsets.ModelViewSet):
     queryset = Precio.objects.all()
     serializer_class = PrecioSerializer
 
+# ViewSet para el modelo Cantidad
 class CantidadViewSet(viewsets.ModelViewSet):
     queryset = Cantidad.objects.all()
     serializer_class = CantidadSerializer
 
+# ViewSet para el modelo Weight
 class WeightViewSet(viewsets.ModelViewSet):
     queryset = Weight.objects.all()
     serializer_class = WeightSerializer
 
-def index(request):
-    return render(request, 'investment_app/index.html')
 
+# APIView para obtener el valor del portafolio en un rango de fechas
 class PortfolioValueDetail(APIView):
     def get(self, request, portafolio_id):
+        # Obtener las fechas de inicio y fin de los parámetros de la solicitud
         fecha_inicio = request.GET.get('fecha_inicio')
         fecha_fin = request.GET.get('fecha_fin')
         
+        # Obtener el portafolio por ID, o devolver un 404 si no existe
         portafolio = get_object_or_404(Portafolio, id=portafolio_id)
+        
+        # Obtener los precios en el rango de fechas especificado
         precios = Precio.objects.filter(fecha__range=[fecha_inicio, fecha_fin])
+        
+        # Obtener las cantidades del portafolio
         cantidades = Cantidad.objects.filter(portafolio=portafolio)
         
+        # Calcular el valor del portafolio por fecha
         valores_por_fecha = {}
         for precio in precios:
             fecha = precio.fecha
@@ -55,29 +68,51 @@ class PortfolioValueDetail(APIView):
             cantidad = cantidades.get(activo=precio.activo).cantidad
             valores_por_fecha[fecha] += precio.valor * cantidad
         
+        # Preparar los datos de respuesta
         response_data = {
             'valores_por_fecha': valores_por_fecha
         }
         
+        # Renderizar la plantilla con los datos de respuesta
         return render(request, 'investment_app/portfolio_values.html', response_data)
     
+# APIView para obtener los pesos del portafolio
 class PortfolioWeightDetail(APIView):
     def get(self, request, portafolio_id):
+        # Obtener el portafolio por ID, o devolver un 404 si no existe
         portafolio = get_object_or_404(Portafolio, id=portafolio_id)
+        
+        # Obtener los pesos del portafolio
         weights = Weight.objects.filter(portafolio=portafolio)
+        
+        # Serializar los datos de los pesos
         serializer = WeightSerializer(weights, many=True)
+        
+        # Renderizar la plantilla con los datos de los pesos
         return render(request, 'investment_app/portfolio_weights.html', {'weights': weights})
 
+# APIView para listar todos los pesos
 class WeightList(APIView):
     def get(self, request):
+        # Obtener todos los pesos
         weights = Weight.objects.all()
+        
+        # Serializar los datos de los pesos
         serializer = WeightSerializer(weights, many=True)
+        
+        # Devolver los datos serializados en la respuesta
         return Response(serializer.data, status=status.HTTP_200_OK)
     
+# APIView para listar todos los precios
 class PriceList(APIView):
     def get(self, request):
+        # Obtener todos los precios
         precios = Precio.objects.all()
+        
+        # Serializar los datos de los precios
         serializer = PrecioSerializer(precios, many=True)
+        
+        # Devolver los datos serializados en la respuesta
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
