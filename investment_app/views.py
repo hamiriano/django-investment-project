@@ -1,4 +1,4 @@
-from django.shortcuts import render
+from django.shortcuts import render, redirect
 from rest_framework import viewsets
 from .models import Activo, Portafolio, Precio, Cantidad, Weight
 from .serializers import ActivoSerializer, PortafolioSerializer, PrecioSerializer, CantidadSerializer, WeightSerializer
@@ -14,6 +14,8 @@ from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
 from rest_framework.parsers import MultiPartParser
 import logging
+from django.db import transaction
+from django.contrib import messages
 
 def index(request):
     return render(request, 'investment_app/index.html')
@@ -65,8 +67,12 @@ class PortfolioValueDetail(APIView):
             fecha = precio.fecha
             if fecha not in valores_por_fecha:
                 valores_por_fecha[fecha] = 0
-            cantidad = cantidades.get(activo=precio.activo).cantidad
-            valores_por_fecha[fecha] += precio.valor * cantidad
+            try:
+                cantidad = cantidades.get(activo=precio.activo).cantidad
+                valores_por_fecha[fecha] += precio.valor * cantidad
+            except Cantidad.DoesNotExist:
+                # Manejar el caso en que no se encuentra la cantidad para el activo
+                valores_por_fecha[fecha] += 0
         
         # Preparar los datos de respuesta
         response_data = {
@@ -97,11 +103,8 @@ class WeightList(APIView):
         # Obtener todos los pesos
         weights = Weight.objects.all()
         
-        # Serializar los datos de los pesos
-        serializer = WeightSerializer(weights, many=True)
-        
-        # Devolver los datos serializados en la respuesta
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        # Renderizar la plantilla con los datos de los pesos
+        return render(request, 'investment_app/portfolio_weights.html', {'weights': weights})
     
 # APIView para listar todos los precios
 class PriceList(APIView):
@@ -109,14 +112,24 @@ class PriceList(APIView):
         # Obtener todos los precios
         precios = Precio.objects.all()
         
-        # Serializar los datos de los precios
-        serializer = PrecioSerializer(precios, many=True)
+        # Renderizar la plantilla con los datos de los precios
+        return render(request, 'investment_app/portfolio_prices.html', {'precios': precios})
+    
+# APIView para listar todas las cantidades iniciales
+class CantidadList(APIView):
+    def get(self, request):
+        # Obtener todas las cantidades
+        cantidades = Cantidad.objects.all()
         
-        # Devolver los datos serializados en la respuesta
-        return Response(serializer.data, status=status.HTTP_200_OK)
-
-
-logger = logging.getLogger(__name__)
+        # Agrupar las cantidades por portafolio
+        portafolio_1_cantidades = cantidades.filter(portafolio__id=1)
+        portafolio_2_cantidades = cantidades.filter(portafolio__id=2)
+        
+        # Renderizar la plantilla con los datos de las cantidades
+        return render(request, 'investment_app/portfolio_cantidades.html', {
+            'portafolio_1_cantidades': portafolio_1_cantidades,
+            'portafolio_2_cantidades': portafolio_2_cantidades
+        })
 
 
 @api_view(['GET', 'POST'])
@@ -130,31 +143,63 @@ def cargar_datos(request):
             # Leer el archivo Excel
             xls = pd.ExcelFile(file_path)
             
-            # Crear los portafolios si no existen
-            portafolio_1, created = Portafolio.objects.get_or_create(id=1, defaults={'nombre': 'Portafolio 1', 'valor_inicial': 1000000000})
-            portafolio_2, created = Portafolio.objects.get_or_create(id=2, defaults={'nombre': 'Portafolio 2', 'valor_inicial': 1000000000})
+            with transaction.atomic():
+                # Limpiar las tablas relevantes
+                Activo.objects.all().delete()
+                Portafolio.objects.all().delete()
+                Precio.objects.all().delete()
+                Cantidad.objects.all().delete()
+                Weight.objects.all().delete()
+                
+                # Crear los portafolios si no existen
+                portafolio_1, created = Portafolio.objects.get_or_create(id=1, defaults={'nombre': 'Portafolio 1', 'valor_inicial': 1000000000})
+                portafolio_2, created = Portafolio.objects.get_or_create(id=2, defaults={'nombre': 'Portafolio 2', 'valor_inicial': 1000000000})
+                
+                # Cargar datos de la hoja Weights
+                df_weights = pd.read_excel(xls, 'weights')
+                activos = {}
+                weights = []
+                for index, row in df_weights.iterrows():
+                    activo, created = Activo.objects.get_or_create(nombre=row['activos'], defaults={'precio': 0})
+                    activos[row['activos']] = activo
+                    weights.append(Weight(portafolio=portafolio_1, activo=activo, peso=row['portafolio 1']))
+                    weights.append(Weight(portafolio=portafolio_2, activo=activo, peso=row['portafolio 2']))
+                Weight.objects.bulk_create(weights)
+                
+                # Cargar datos de la hoja Precios
+                df_precios = pd.read_excel(xls, 'Precios')
+                precios = []
+                for index, row in df_precios.iterrows():
+                    fecha = row['Dates']
+                    for activo_nombre in df_precios.columns[1:]:
+                        activo = activos[activo_nombre]
+                        precios.append(Precio(activo=activo, fecha=fecha, valor=row[activo_nombre]))
+                Precio.objects.bulk_create(precios)
+                
+                # Calcular y guardar las cantidades iniciales
+                valor_inicial = 1000000000
+                cantidades = []
+                for index, row in df_weights.iterrows():
+                    activo = activos[row['activos']]
+                    peso_1 = float(row['portafolio 1'])
+                    peso_2 = float(row['portafolio 2'])
+                    precio_inicial = float(Precio.objects.get(activo=activo, fecha='2022-02-15').valor)
+                    cantidad_1 = (peso_1 * valor_inicial) / precio_inicial
+                    cantidad_2 = (peso_2 * valor_inicial) / precio_inicial
+                    cantidades.append(Cantidad(portafolio=portafolio_1, activo=activo, cantidad=cantidad_1))
+                    cantidades.append(Cantidad(portafolio=portafolio_2, activo=activo, cantidad=cantidad_2))
+                Cantidad.objects.bulk_create(cantidades)
             
-            # Cargar datos de la hoja Weights
-            df_weights = pd.read_excel(xls, 'weights')
-            for index, row in df_weights.iterrows():
-                activo, created = Activo.objects.get_or_create(nombre=row['activos'], defaults={'precio': 0})
-                Weight.objects.update_or_create(portafolio=portafolio_1, activo=activo, defaults={'peso': row['portafolio 1']})
-                Weight.objects.update_or_create(portafolio=portafolio_2, activo=activo, defaults={'peso': row['portafolio 2']})
-            
-            # Cargar datos de la hoja Precios
-            df_precios = pd.read_excel(xls, 'Precios')
-            for index, row in df_precios.iterrows():
-                fecha = row['Dates']
-                for activo_nombre in df_precios.columns[1:]:
-                    activo = Activo.objects.get(nombre=activo_nombre)
-                    Precio.objects.update_or_create(activo=activo, fecha=fecha, defaults={'valor': row[activo_nombre]})
-            
-            return Response({"status": "Datos cargados correctamente"}, status=status.HTTP_201_CREATED)
+            messages.success(request, "Datos cargados correctamente")
+            return redirect('cargar-datos')
         
         except Exception as e:
             logger.error(f"Error al cargar datos: {e}")
-            return Response({"status": "Error al cargar datos", "error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            messages.error(request, f"Error al cargar datos: {e}")
+            return redirect('cargar-datos')
     
     # Renderizar la plantilla para la solicitud GET
     if request.method == 'GET':
         return render(request, 'investment_app/cargar_datos.html')
+    
+logger = logging.getLogger(__name__)

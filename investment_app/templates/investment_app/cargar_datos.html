@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cargar Datos</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -40,6 +41,15 @@
             padding: 10px;
             margin-bottom: 10px;
         }
+        .messages {
+            margin-top: 20px;
+        }
+        .messages .success {
+            color: green;
+        }
+        .messages .error {
+            color: red;
+        }
     </style>
 </head>
 <body>
@@ -49,11 +59,18 @@
         </div>
     </header>
     <div class="container">
+        <div class="messages">
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="{{ message.tags }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        </div>
         <form action="{% url 'cargar-datos' %}" method="post" enctype="multipart/form-data">
             {% csrf_token %}
             <label for="file">Seleccione el archivo Excel:</label>
-            <input type="file" id="file" name="file" accept=".xlsx">
-            <button type="submit">Cargar</button>
+            <input type="file" id="file" name="file" class="form-control" accept=".xlsx">
+            <button type="submit" class="btn btn-primary">Cargar</button>
         </form>
     </div>
 </body>
